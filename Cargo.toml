@@ -1,0 +1,12 @@
+[package]
+name = "clast-rs"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+fastcdc = []
+
+[dependencies]
+
+[build-dependencies]
+rand_chacha = "0.9.0"

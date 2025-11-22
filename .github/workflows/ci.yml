@@ -1,0 +1,105 @@
+name: CI
+
+on:
+    push:
+        branches:
+            - main
+        paths-ignore:
+            - "**/*.md"
+            - "**/.gitignore"
+    pull_request:
+        branches:
+            - main
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Cache cargo registry + build
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/bin
+                      ~/.cargo/registry/index
+                      ~/.cargo/registry/cache
+                      ~/.cargo/git/db
+                      target
+                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-cargo-
+
+            - name: Check formatting
+              run: cargo fmt -- --check
+
+            - name: Clippy lint
+              run: cargo clippy --all-targets --all-features -- -D warnings
+
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout sources
+              uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Cache cargo registry + build
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/bin
+                      ~/.cargo/registry/index
+                      ~/.cargo/registry/cache
+                      ~/.cargo/git/db
+                      target
+                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-cargo-
+
+            - name: Run default tests
+              run: cargo test --all-targets
+
+            - name: Run feature tests
+              run: |
+                  set -euo pipefail
+                  metadata="$(cargo metadata --no-deps --format-version 1)"
+                  pkg_id="$(printf '%s' "${metadata}" | jq -r '.resolve.root')"
+                  feature_list="$(printf '%s' "${metadata}" \
+                    | jq -r --arg pkg_id "${pkg_id}" '.packages[] | select(.id==$pkg_id) | .features | keys[]')"
+
+                  if [ -z "${feature_list}" ]; then
+                    echo "No features detected; skipping feature matrix."
+                    exit 0
+                  fi
+
+                  exit_code=0
+                  ran=0
+                  while IFS= read -r feature; do
+                    if [ -z "${feature}" ] || [ "${feature}" = "default" ]; then
+                      continue
+                    fi
+
+                    ran=$((ran + 1))
+                    echo "::group::cargo test --all-targets --features ${feature}"
+                    if ! cargo test --all-targets --features "${feature}"; then
+                      exit_code=1
+                    fi
+                    echo "::endgroup::"
+                  done <<<"${feature_list}"
+
+                  if [ "${ran}" -eq 0 ]; then
+                    echo "Only default feature detected; skipping optional feature tests."
+                  fi
+
+                  exit "${exit_code}"
