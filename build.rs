@@ -95,7 +95,7 @@ fn generate_mask_table(gear_table: &[u64; GEAR_TABLE_SIZE]) {
 
     for idx in 0..MASK_TABLE_SIZE {
         if idx < MASK_PADDING_SLOTS {
-            writeln!(file_buf, "    {:#18x},", 0).unwrap();
+            writeln!(file_buf, "    {:#x},", 0).unwrap();
             continue;
         }
 
@@ -109,7 +109,7 @@ fn generate_mask_table(gear_table: &[u64; GEAR_TABLE_SIZE]) {
         }
 
         let mask = find_optimal_mask(&stats, bits_needed);
-        writeln!(file_buf, "    {:#18x},", mask).unwrap();
+        writeln!(file_buf, "    {:#x},", mask).unwrap();
     }
 
     writeln!(file_buf, "];").unwrap();
