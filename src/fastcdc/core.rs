@@ -81,7 +81,7 @@ impl FastCDC {
         max_size: usize,
         normal: Normal,
     ) -> io::Result<Self> {
-        if !(min_size >= MIN_CHUNK_SIZE_MIN && min_size <= MIN_CHUNK_SIZE_MAX) {
+        if !(MIN_CHUNK_SIZE_MIN..=MIN_CHUNK_SIZE_MAX).contains(&min_size) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!(
@@ -91,7 +91,7 @@ impl FastCDC {
             ));
         }
 
-        if !(avg_size >= AVG_CHUNK_SIZE_MIN && avg_size <= AVG_CHUNK_SIZE_MAX) {
+        if !(AVG_CHUNK_SIZE_MIN..=AVG_CHUNK_SIZE_MAX).contains(&avg_size) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!(
@@ -101,7 +101,7 @@ impl FastCDC {
             ));
         }
 
-        if !(max_size >= MAX_CHUNK_SIZE_MIN && max_size <= MAX_CHUNK_SIZE_MAX) {
+        if !(MAX_CHUNK_SIZE_MIN..=MAX_CHUNK_SIZE_MAX).contains(&max_size) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!(

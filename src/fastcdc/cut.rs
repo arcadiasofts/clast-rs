@@ -16,6 +16,7 @@ include!(concat!(env!("OUT_DIR"), "/gear_table.rs"));
 /// * `mask_l`: Mask for the section larger than the average size.
 /// * `mask_l_ls`: Left-shifted `mask_l`.
 ///
+#[allow(clippy::too_many_arguments)]
 #[inline]
 pub fn find_cutpoint(
     source: &[u8],
