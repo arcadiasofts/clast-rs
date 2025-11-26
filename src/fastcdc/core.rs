@@ -369,7 +369,7 @@ mod tests {
 
     impl Read for FailingReader {
         fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::Other, "simulated read error"))
+            Err(io::Error::other("simulated read error"))
         }
     }
 
