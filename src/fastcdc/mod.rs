@@ -24,5 +24,7 @@ mod mask;
 
 pub use chunk::Chunk;
 pub use core::FastCDC;
-pub use cut::find_cutpoint;
 pub use mask::Normal;
+
+#[cfg(feature = "async")]
+pub mod stream;

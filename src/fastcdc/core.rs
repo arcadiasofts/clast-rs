@@ -1,6 +1,6 @@
 use crate::fastcdc::Normal;
 use crate::fastcdc::chunk::Chunk;
-use crate::fastcdc::cut::find_cutpoint;
+use crate::fastcdc::cut::find_cutpoint_inner;
 use crate::fastcdc::mask::Masks;
 use bytes::BytesMut;
 use std::io::Read;
@@ -23,10 +23,10 @@ pub const MAX_CHUNK_SIZE_MAX: usize = 16_777_216; // 16 MB
 
 /// A FastCDC chunker implementation.
 pub struct FastCDC {
-    min_size: usize,
-    avg_size: usize,
-    max_size: usize,
-    masks: Masks,
+    pub(super) min_size: usize,
+    pub(super) avg_size: usize,
+    pub(super) max_size: usize,
+    pub(super) masks: Masks,
 }
 
 impl FastCDC {
@@ -144,9 +144,24 @@ impl FastCDC {
             eof: false,
         }
     }
+
+    #[inline]
+    fn find_cutpoint(&self, source: &[u8]) -> (u64, usize) {
+        find_cutpoint_inner(
+            source,
+            0,
+            0,
+            self.min_size,
+            self.avg_size,
+            self.max_size,
+            self.masks.mask_s,
+            self.masks.mask_s_ls,
+            self.masks.mask_l,
+            self.masks.mask_l_ls,
+        )
+    }
 }
 
-/// An iterator that yields `Chunk`s from a `Read` source.
 pub struct FastCDCIter<'a, R: Read> {
     chunker: &'a FastCDC,
     reader: R,
@@ -167,20 +182,25 @@ impl<'a, R: Read> Iterator for FastCDCIter<'a, R> {
             let buf_len = self.buf.len();
             let needed = self.chunker.max_size - buf_len;
 
-            self.buf.resize(buf_len + needed, 0);
+            self.buf.reserve(needed);
 
-            match self.reader.read(&mut self.buf[buf_len..]) {
-                Ok(0) => {
-                    self.eof = true;
-                    self.buf.truncate(buf_len);
-                    break;
-                }
-                Ok(n) => {
-                    self.buf.truncate(buf_len + n);
-                }
-                Err(e) => {
-                    self.buf.truncate(buf_len);
-                    return Some(Err(e));
+            // SAFETY: Capacity is guaranteed via `reserve`. We only increase length
+            // after writing to the uninitialized region to prevent undefined behavior.
+            unsafe {
+                let ptr = self.buf.as_mut_ptr().add(buf_len);
+                let dst = std::slice::from_raw_parts_mut(ptr, needed);
+
+                match self.reader.read(dst) {
+                    Ok(0) => {
+                        self.eof = true;
+                        break;
+                    }
+                    Ok(n) => {
+                        self.buf.set_len(buf_len + n);
+                    }
+                    Err(e) => {
+                        return Some(Err(e));
+                    }
                 }
             }
         }
@@ -190,16 +210,7 @@ impl<'a, R: Read> Iterator for FastCDCIter<'a, R> {
         }
 
         let scan_len = self.buf.len().min(self.chunker.max_size);
-        let (fp_hash, cutpoint) = find_cutpoint(
-            &self.buf[..scan_len],
-            self.chunker.min_size,
-            self.chunker.avg_size,
-            self.chunker.max_size,
-            self.chunker.masks.mask_s,
-            self.chunker.masks.mask_s_ls,
-            self.chunker.masks.mask_l,
-            self.chunker.masks.mask_l_ls,
-        );
+        let (fp_hash, cutpoint) = self.chunker.find_cutpoint(&self.buf[..scan_len]);
 
         let data = self.buf.split_to(cutpoint).freeze();
 
@@ -216,175 +227,8 @@ impl<'a, R: Read> Iterator for FastCDCIter<'a, R> {
     }
 }
 
+// --- Tests ---
+
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{env, fs, io, path::PathBuf};
-
-    const MIN_SIZE: usize = 4_069;
-    const AVG_SIZE: usize = 8_192;
-    const MAX_SIZE: usize = 16_384;
-
-    fn generate_patterned_data(len: usize) -> Vec<u8> {
-        const BLOCKS: [&[u8]; 3] = [b"LOREM", b"IPSUM", b"DOLOR"];
-
-        let mut data = Vec::with_capacity(len);
-        let mut idx = 0;
-
-        while data.len() < len {
-            data.extend_from_slice(BLOCKS[idx % BLOCKS.len()]);
-            idx += 1;
-        }
-
-        data.truncate(len);
-        data
-    }
-
-    // --- Input Tests ---
-
-    #[test]
-    fn test_empty_input() {
-        let data: [u8; 0] = [];
-        let chunker = FastCDC::new(MIN_SIZE, AVG_SIZE, MAX_SIZE, Normal::Level2);
-
-        let mut iter = chunker.chunks(&data[..]);
-
-        // Empty input should not produce any chunks
-        assert!(
-            iter.next().is_none(),
-            "Empty input should not yield any chunks"
-        );
-    }
-
-    #[test]
-    fn test_small_input() {
-        let data = generate_patterned_data(MIN_SIZE / 2);
-        let chunker = FastCDC::new(MIN_SIZE, AVG_SIZE, MAX_SIZE, Normal::Level2);
-        let chunks = chunker
-            .chunks(&data[..])
-            .collect::<io::Result<Vec<_>>>()
-            .expect("Failed to chunk small input");
-
-        // Input smaller than min_size should result in a single chunk
-        assert_eq!(
-            chunks.len(),
-            1,
-            "Small input must produce exactly one chunk"
-        );
-
-        // The chunk length should match the source data length
-        assert_eq!(chunks[0].length, data.len());
-
-        // The chunk content should match the source data
-        assert_eq!(chunks[0].data.as_ref(), &data[..]);
-    }
-
-    // --- Chunking Tests ---
-
-    #[test]
-    fn test_round_trip_chunking() {
-        let data = generate_patterned_data(50_000);
-        let chunker = FastCDC::new(MIN_SIZE, AVG_SIZE, MAX_SIZE, Normal::Level2);
-
-        let mut reconstructed = Vec::with_capacity(data.len());
-        let mut chunk_count = 0;
-
-        for chunk in chunker.chunks(&data[..]) {
-            let chunk = chunk.expect("Failed to read chunk");
-
-            reconstructed.extend_from_slice(chunk.data.as_ref());
-            chunk_count += 1;
-        }
-
-        // Must produce at least one chunk
-        assert!(
-            chunk_count > 0,
-            "Input data should yield at least one chunk"
-        );
-
-        // Reconstructed data must match the original data
-        assert_eq!(
-            reconstructed, data,
-            "Reconstructed data does not match original"
-        );
-    }
-
-    #[test]
-    fn test_image_chunking() {
-        let base_path = env!("CARGO_MANIFEST_DIR");
-        let file_path = PathBuf::from(base_path).join("test/test_image.jpg");
-
-        if !file_path.exists() {
-            eprintln!(
-                "Test file not found at {:?}. Skipping image test.",
-                file_path
-            );
-            return;
-        }
-
-        let file = fs::File::open(&file_path).expect("Failed to open test file");
-        let file_len = file.metadata().expect("Failed to get file metadata").len() as usize;
-        let reader = io::BufReader::new(file);
-
-        let chunker = FastCDC::new(MIN_SIZE, AVG_SIZE, MAX_SIZE, Normal::Level2);
-
-        let mut reconstructed = Vec::with_capacity(file_len);
-        let mut total_len: usize = 0;
-
-        for chunk in chunker.chunks(reader) {
-            let chunk = chunk.expect("Failed to read chunk");
-
-            // Chunk size must not exceed max_size
-            assert!(
-                chunk.length <= MAX_SIZE,
-                "Chunk size {} exceeds max_size {}",
-                chunk.length,
-                MAX_SIZE
-            );
-
-            reconstructed.extend_from_slice(&chunk.data);
-            total_len += chunk.length;
-        }
-
-        // Total length of chunks must match the original file size
-        assert_eq!(
-            total_len, file_len,
-            "Total chunk length does not match original file size"
-        );
-
-        // Verify the content by reading the file again.
-        // While this involves double IO, it ensures the reader interface works correctly while validating data integrity.
-        let original_data = fs::read(&file_path).expect("Failed to read validation data");
-
-        // Reconstructed data must be identical to the original file
-        assert_eq!(
-            reconstructed, original_data,
-            "Reconstructed data does not match original file"
-        );
-    }
-
-    // --- Error Test ---
-
-    struct FailingReader;
-
-    impl Read for FailingReader {
-        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-            Err(io::Error::other("simulated read error"))
-        }
-    }
-
-    #[test]
-    fn test_reader_error() {
-        let chunker = FastCDC::new(MIN_SIZE, AVG_SIZE, MAX_SIZE, Normal::Level2);
-        let reader = FailingReader;
-
-        let mut iter = chunker.chunks(reader);
-        let result = iter.next().expect("Iterator expected to yield a result");
-
-        // Verify that the iterator correctly propagates the error from the underlying reader
-        assert!(
-            result.is_err(),
-            "Iterator failed to propagate the read error immediately"
-        );
-    }
-}
+#[path = "tests/core_tests.rs"]
+mod tests;
