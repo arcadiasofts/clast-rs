@@ -30,7 +30,7 @@ async fn test_empty_input() {
     let data: [u8; 0] = [];
     let chunker = FastCDC::new(MIN_SIZE, AVG_SIZE, MAX_SIZE, Normal::Level2);
 
-    let mut stream = chunker.as_stream(&data[..]);
+    let mut stream = chunker.chunks_async(&data[..]);
 
     // Empty input should not produce any chunks
     assert!(
@@ -44,7 +44,7 @@ async fn test_small_input() {
     let data = generate_patterned_data(MIN_SIZE / 2);
     let chunker = FastCDC::new(MIN_SIZE, AVG_SIZE, MAX_SIZE, Normal::Level2);
 
-    let chunks: Vec<_> = chunker.as_stream(&data[..]).collect::<Vec<_>>().await;
+    let chunks: Vec<_> = chunker.chunks_async(&data[..]).collect::<Vec<_>>().await;
 
     // Input smaller than min_size should result in a single chunk
     assert_eq!(
@@ -72,7 +72,7 @@ async fn test_round_trip_chunking() {
     let mut reconstructed = Vec::with_capacity(data.len());
     let mut chunk_count = 0;
 
-    let mut stream = chunker.as_stream(&data[..]);
+    let mut stream = chunker.chunks_async(&data[..]);
 
     while let Some(chunk_res) = stream.next().await {
         let chunk = chunk_res.expect("Failed to read chunk");
@@ -96,7 +96,7 @@ async fn test_round_trip_chunking() {
 #[tokio::test]
 async fn test_image_chunking() {
     let base_path = env!("CARGO_MANIFEST_DIR");
-    let file_path = PathBuf::from(base_path).join("test/test_image.jpg");
+    let file_path = PathBuf::from(base_path).join("assets/test_image.jpg");
 
     if !file_path.exists() {
         eprintln!(
@@ -118,7 +118,7 @@ async fn test_image_chunking() {
     let mut reconstructed = Vec::with_capacity(file_len);
     let mut total_len: usize = 0;
 
-    let mut stream = chunker.as_stream(reader);
+    let mut stream = chunker.chunks_async(reader);
 
     while let Some(chunk_res) = stream.next().await {
         let chunk = chunk_res.expect("Failed to read chunk");
@@ -170,7 +170,7 @@ async fn test_reader_error() {
     let chunker = FastCDC::new(MIN_SIZE, AVG_SIZE, MAX_SIZE, Normal::Level2);
     let reader = FailingReader;
 
-    let mut stream = chunker.as_stream(reader);
+    let mut stream = chunker.chunks_async(reader);
     let result = stream
         .next()
         .await

@@ -92,7 +92,7 @@ fn test_round_trip_chunking() {
 #[test]
 fn test_image_chunking() {
     let base_path = env!("CARGO_MANIFEST_DIR");
-    let file_path = PathBuf::from(base_path).join("test/test_image.jpg");
+    let file_path = PathBuf::from(base_path).join("assets/test_image.jpg");
 
     if !file_path.exists() {
         eprintln!(

@@ -16,7 +16,7 @@ impl FastCDC {
     ///
     /// * `reader`: The source to read data from (must implement `AsyncRead`).
     ///
-    pub fn as_stream<R>(&self, reader: R) -> FastCDCStream<'_, R>
+    pub fn chunks_async<R>(&self, reader: R) -> FastCDCStream<'_, R>
     where
         R: AsyncRead + Unpin,
     {
