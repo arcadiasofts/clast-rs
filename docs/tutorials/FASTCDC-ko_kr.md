@@ -2,6 +2,8 @@
 
 **FastCDC**는 데이터를 가변 크기의 청크로 분할하는 콘텐츠 정의 청킹(Content-Defined Chunking) 알고리즘입니다.
 
+<br/>
+
 ## 사용법
 
 ### 동기(Synchronous) 예제
@@ -54,5 +56,23 @@ async fn main() -> std::io::Result<()> {
     }
     Ok(())
 }
+```
+
+<br/>
+
+## 빌드 설정
+
+### Gear 테이블 생성 사용자 정의
+
+FastCDC는 롤링 해시 계산을 위해 미리 계산된 Gear 테이블을 사용합니다. 기본적으로 이 테이블은 고정된 시드(`318046`)를 사용하여 생성됩니다. `GEAR_SEED` 환경 변수를 설정하여 빌드 시점에 이 시드를 변경할 수 있습니다.
+
+이는 다른 해시 분포를 실험하거나 재현성을 보장하는 데 유용합니다.
+
+```bash
+# Linux / macOS
+GEAR_SEED=12345 cargo build
+
+# Windows (PowerShell)
+$env:GEAR_SEED=12345; cargo build
 ```
 

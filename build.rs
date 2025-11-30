@@ -25,7 +25,7 @@ fn main() {
 
 // --- Gear Table Generator ---
 
-const DEFAULT_GEAR_SEED: u64 = 14387234659234864480;
+const DEFAULT_GEAR_SEED: u64 = 318046;
 const GEAR_TABLE_SIZE: usize = 256;
 
 fn generate_gear_table() -> [u64; GEAR_TABLE_SIZE] {

@@ -2,6 +2,8 @@
 
 **FastCDC** is a content-defined chunking algorithm that splits data into variable-sized chunks.
 
+<br/>
+
 ## Usage
 
 ### Synchronous Example
@@ -54,4 +56,22 @@ async fn main() -> std::io::Result<()> {
     }
     Ok(())
 }
+```
+
+<br/>
+
+## Build Configuration
+
+### Customizing Gear Table Generation
+
+The FastCDC implementation uses a pre-computed Gear table for rolling hash calculations. By default, this table is generated using a fixed seed (`318046`). You can customize this seed by setting the `GEAR_SEED` environment variable at build time.
+
+This is useful for experimenting with different hash distributions or ensuring reproducibility.
+
+```bash
+# Linux / macOS
+GEAR_SEED=12345 cargo build
+
+# Windows (PowerShell)
+$env:GEAR_SEED=12345; cargo build
 ```
