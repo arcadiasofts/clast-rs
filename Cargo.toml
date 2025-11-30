@@ -1,6 +1,6 @@
 [package]
 name = "clast"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["BlueMoon2 <blueluna.two@gmail.com>"]
 edition = "2024"
 description = "A Rust library for Content-Defined Chunking (CDC)."
