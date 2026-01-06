@@ -75,7 +75,7 @@ cargo add clast --features async
 
 ```toml
 [dependencies]
-clast = { version = "1.0.3", features = ["async"] }
+clast = { version = "1.0.2", features = ["async"] }
 ```
 
 <br/>
