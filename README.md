@@ -76,7 +76,7 @@ Or in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-clast = { version = "1.0.0", features = ["async"] }
+clast = { version = "1.0.3", features = ["async"] }
 ```
 
 <br/>
